@@ -18,4 +18,4 @@
 
 
  Publish Page:
- https://ipearworks.cn/NEU-Mathe-Local/
+ http://ipearworks.cn/NEU-Mathe-Local/
