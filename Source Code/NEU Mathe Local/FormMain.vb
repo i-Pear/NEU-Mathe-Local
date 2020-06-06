@@ -23,6 +23,9 @@ Public Class FormMain
     Friend ConfigPath As String
     Friend MainConfigPath As String = Environment.CurrentDirectory & "\Config Main.ini"
 
+    Private ifChapterShuffle As Boolean
+    Private nodes As New ArrayList
+
     'Private Sub CreateShortcut(lnkFileName As String, Arguments As String)
     '    Dim CreateDir As String = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
     '    Dim wShell As New IWshShell_Class
@@ -47,6 +50,17 @@ Public Class FormMain
         End If
 
     End Function
+
+    'FormSelectHM.TreeView1.Nodes(chapterCountdown)
+    Private Sub getLeaves(ByRef node As TreeNode)
+        If node.Nodes.Count = 0 Then
+            nodes.Add(node.Name)
+            Return
+        End If
+        For i = 0 To node.Nodes.Count - 1
+            getLeaves(node.Nodes(i))
+        Next
+    End Sub
 
     Private Sub DisplayDetails()
 
@@ -149,6 +163,17 @@ Public Class FormMain
     End Sub
 
     Private Sub FormMain_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        If My.Computer.FileSystem.FileExists(Environment.CurrentDirectory & "\shuffle.ini") Then
+            ifChapterShuffle = True
+            Dim reader As New IO.StreamReader(Environment.CurrentDirectory & "\shuffle.ini")
+            Dim chapterCountdown As Integer = reader.ReadLine
+            chapterCountdown -= 1
+            getLeaves(FormSelectHM.TreeView1.Nodes(chapterCountdown))
+            reader.Close()
+        Else
+            ifChapterShuffle = False
+        End If
+
         '检测文件完整性
         If Not My.Computer.FileSystem.FileExists(Environment.CurrentDirectory & "\System.Data.SqlServerCe.dll") Then
             MessageBox.Show("文件完整性效验失败：缺少System.Data.SqlServerCe.dll")
@@ -214,14 +239,30 @@ Public Class FormMain
             End Try
             '加载数据
             Dim cmd As SqlCeCommand = MyDatabaseConnection.CreateCommand
-            Select Case ViewMode
-                Case "All"
-                    cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' ORDER BY id;"
-                Case "Error"
-                    cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' AND mark = 1 ORDER BY id;"
-                Case "NotDone"
-                    cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' AND done = 0 ORDER BY id;"
-            End Select
+
+            If ifChapterShuffle Then
+                Dim s = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE "
+                Dim ifFirst As Boolean = True
+                For Each node In nodes
+                    If ifFirst Then
+                        s = s & " parent = '" & node & "' "
+                        ifFirst = False
+                    Else
+                        s = s & " or parent = '" & node & "' "
+                    End If
+                Next
+                cmd.CommandText = s & " ORDER BY RAND();"
+            Else
+                Select Case ViewMode
+                    Case "All"
+                        cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' ORDER BY id;"
+                    Case "Error"
+                        cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' AND mark = 1 ORDER BY id;"
+                    Case "NotDone"
+                        cmd.CommandText = "SELECT id,img0,img1,img2,img3,img4,imgans,ans,done,mark FROM main WHERE parent = '" & Chapterid & "' AND done = 0 ORDER BY id;"
+                End Select
+            End If
+
             MyDataAdaper = New SqlCeDataAdapter(cmd)
             MyCommandBuilder = New SqlCeCommandBuilder With {
                 .DataAdapter = MyDataAdaper
@@ -236,7 +277,21 @@ Public Class FormMain
     Public Sub LoadCounts()
         Dim cmd As SqlCeCommand = MyDatabaseConnection.CreateCommand
         'Part Sum
-        cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "';"
+        If ifChapterShuffle Then
+            Dim s = "SELECT COUNT(*) as count FROM main WHERE "
+            Dim ifFirst As Boolean = True
+            For Each node In nodes
+                If ifFirst Then
+                    s = s & " parent = '" & node & "' "
+                    ifFirst = False
+                Else
+                    s = s & " or parent = '" & node & "' "
+                End If
+            Next
+            cmd.CommandText = s & " ;"
+        Else
+            cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "';"
+        End If
         MyDataAdaper = New SqlCeDataAdapter(cmd)
         MyCommandBuilder = New SqlCeCommandBuilder With {
         .DataAdapter = MyDataAdaper
@@ -245,7 +300,21 @@ Public Class FormMain
         MyDataAdaper.Fill(MyDataSet)
         ChapterSumCount = MyDataSet.Tables(0).Rows(0).Item(0)
         'Part Error
-        cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "' AND mark = 1;"
+        If ifChapterShuffle Then
+            Dim s = "SELECT COUNT(*) as count FROM main WHERE "
+            Dim ifFirst As Boolean = True
+            For Each node In nodes
+                If ifFirst Then
+                    s = s & " parent = '" & node & "' "
+                    ifFirst = False
+                Else
+                    s = s & " or parent = '" & node & "' "
+                End If
+            Next
+            cmd.CommandText = s & " AND mark = 1;"
+        Else
+            cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "' AND mark = 1;"
+        End If
         MyDataAdaper = New SqlCeDataAdapter(cmd)
         MyCommandBuilder = New SqlCeCommandBuilder With {
             .DataAdapter = MyDataAdaper
@@ -262,7 +331,21 @@ Public Class FormMain
             Application.Restart()
         End If
         'Part NotDone
-        cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "' AND done = 0;"
+        If ifChapterShuffle Then
+            Dim s = "SELECT COUNT(*) as count FROM main WHERE "
+            Dim ifFirst As Boolean = True
+            For Each node In nodes
+                If ifFirst Then
+                    s = s & " parent = '" & node & "' "
+                    ifFirst = False
+                Else
+                    s = s & " or parent = '" & node & "' "
+                End If
+            Next
+            cmd.CommandText = s & " AND done = 0;"
+        Else
+            cmd.CommandText = "SELECT COUNT(*) as count FROM main WHERE parent = '" & Chapterid & "' AND done = 0;"
+        End If
         MyDataAdaper = New SqlCeDataAdapter(cmd)
         MyCommandBuilder = New SqlCeCommandBuilder With {
             .DataAdapter = MyDataAdaper
